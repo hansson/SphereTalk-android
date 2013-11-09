@@ -1,4 +1,4 @@
-package net.spherechat.android;
+package net.spheretalk.android;
 
 import java.util.Locale;
 
