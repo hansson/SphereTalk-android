@@ -18,7 +18,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
-public class ChatActivity extends Activity {
+public class ChatActivity extends GCMActivity {
 
     /**
      * The {@link android.support.v4.view.PagerAdapter} that will provide
