@@ -60,6 +60,7 @@ public class ChatActivity extends GCMActivity {
     SectionsPagerAdapter mSectionsPagerAdapter;
     Location mLocation;
     DialogFragment mloginDialog;
+    List<String> mUsers;
 
     /**
      * The {@link ViewPager} that will host the section contents.
@@ -341,7 +342,13 @@ public class ChatActivity extends GCMActivity {
                     JSONArray users = json.getJSONArray(Constants.WEBS_USERS);
 
                     if(status.equals(Constants.WEBS_STATUS_OK)) {
-                        //TODO: Where should the users be saved?
+                        //TODO: Where should the users be saved? Stored in an arraylist for now
+                        mUsers = new ArrayList<String>();
+
+                        for(int i=0; i < users.length(); i++) {
+                            JSONObject user = users.getJSONObject(i);
+                            mUsers.add(user.getString(Constants.WEBS_USERNAME));
+                        }
 
                         mloginDialog.getDialog().dismiss();
                     }

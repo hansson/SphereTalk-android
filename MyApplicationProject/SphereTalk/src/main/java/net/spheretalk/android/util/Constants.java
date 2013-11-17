@@ -11,6 +11,7 @@ public class Constants {
     //Webservice result constants
     public static final String WEBS_STATUS = "status";
     public static final String WEBS_USERS = "users";
+    public static final String WEBS_USERNAME = "username";
     public static final String WEBS_STATUS_OK = "OK";
     public static final String WEBS_STATUS_NOK = "NOT_OK";
     public static final String WEBS_STATUS_USER_TAKEN = "USERNAME_TAKEN";
