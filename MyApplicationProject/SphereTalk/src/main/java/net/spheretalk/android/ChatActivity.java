@@ -1,6 +1,8 @@
 package net.spheretalk.android;
 
-import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.Dialog;
+import android.app.DialogFragment;
 import android.app.Fragment;
 import android.app.FragmentManager;
 import android.content.Context;
@@ -10,14 +12,16 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.support.v13.app.FragmentPagerAdapter;
 import android.support.v4.view.ViewPager;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.TextView;
 
 import net.spheretalk.android.util.Constants;
@@ -32,6 +36,10 @@ import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.message.BasicNameValuePair;
+import org.apache.http.util.EntityUtils;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -50,6 +58,8 @@ public class ChatActivity extends GCMActivity {
      * {@link android.support.v13.app.FragmentStatePagerAdapter}.
      */
     SectionsPagerAdapter mSectionsPagerAdapter;
+    Location mLocation;
+    DialogFragment mloginDialog;
 
     /**
      * The {@link ViewPager} that will host the section contents.
@@ -61,8 +71,6 @@ public class ChatActivity extends GCMActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_chat);
 
-
-
         // Create the adapter that will return a fragment for each of the three
         // primary sections of the activity.
         mSectionsPagerAdapter = new SectionsPagerAdapter(getFragmentManager());
@@ -71,6 +79,8 @@ public class ChatActivity extends GCMActivity {
         mViewPager = (ViewPager) findViewById(R.id.pager);
         mViewPager.setAdapter(mSectionsPagerAdapter);
 
+        mloginDialog = new LoginDialogFragment();
+        mloginDialog.show(getFragmentManager(), "Login Dialog");
     }
 
 
@@ -170,12 +180,84 @@ public class ChatActivity extends GCMActivity {
         }
     }
 
+    public class LoginDialogFragment extends DialogFragment {
+
+        private TextView locationStatus;
+
+        public LoginDialogFragment() {
+            //This is required in a DialogFragment
+        }
+        @Override
+        public Dialog onCreateDialog(Bundle savedInstanceState) {
+            AlertDialog.Builder alertDialogBuilder = new AlertDialog.Builder(getActivity());
+            LayoutInflater inflater = getActivity().getLayoutInflater();
+            setFinishOnTouchOutside(false);
+            locationStatus = (TextView)findViewById(R.id.loginStatusMessage);
+            if(mLocation != null) {
+                locationStatus.setText(getString(R.string.location_found));
+            }
+
+            alertDialogBuilder.setView(inflater.inflate(R.layout.login_chat, null));
+            alertDialogBuilder.setCancelable(false);
+
+            alertDialogBuilder.setPositiveButton(getString(R.string.ok), null);
+
+            Dialog loginDlg = alertDialogBuilder.create();
+            loginDlg.setCanceledOnTouchOutside(false);
+
+            new LocationFetcher(locationStatus).execute();
+
+            return loginDlg;
+        }
+
+        @Override
+        public void onResume()
+        {
+            super.onResume();
+            AlertDialog alertDialog = (AlertDialog) getDialog();
+            Button okButton = alertDialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            okButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v)
+                {
+                    performOkButtonAction();
+                }
+            });
+        }
+
+        private void performOkButtonAction() {
+            Log.d(Constants.LOG_TAG, "Checking if alert should be closed");
+            EditText inputUsername = (EditText) getDialog().findViewById(R.id.username);
+            String username = inputUsername.getText().toString();
+
+            Log.d(Constants.LOG_TAG, "Length of username: " + username.length());
+
+            if(mLocation != null && username.length() >= 5) {
+                //TODO: Call the async login so that we know
+                SharedPreferences settings = getSharedPreferences(Constants.PREF_TAG, 0);
+                SharedPreferences.Editor editor = settings.edit();
+                editor.putString(Constants.PREF_USERNAME, username);
+
+                new SendPosition().execute();
+            }
+        }
+
+        public void updateLocationText(String text) {
+            locationStatus.append(text);
+        }
+    }
+
     public class LocationFetcher extends AsyncTask<Void, Void, Location> implements LocationListener {
 
         //Set the max age of a location 2*60*1000 = 2min
         final long TOO_OLD = 2*60*1000;
         private Location location;
         private LocationManager lm;
+        private TextView locationStatus;
+
+        LocationFetcher(TextView tv) {
+            locationStatus = tv;
+        }
 
         protected void onPreExecute()
         {
@@ -186,18 +268,19 @@ public class ChatActivity extends GCMActivity {
 
         protected Location doInBackground(Void... params)
         {
-            // Try to use the last known position
+            Log.d(Constants.LOG_TAG, "Fetching last known location");
             Location lastLocation = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
 
-            // If it's too old, get a new one by location manager
             if (System.currentTimeMillis() - lastLocation.getTime() > TOO_OLD)
             {
+                Log.d(Constants.LOG_TAG, "Last location too old, requesting a new one");
                 while (location == null)
                     try { Thread.sleep(100); } catch (Exception ex) {}
 
+                Log.d(Constants.LOG_TAG, "Returning new location");
                 return location;
             }
-
+            Log.d(Constants.LOG_TAG, "Using last known location");
             return lastLocation;
         }
 
@@ -205,6 +288,17 @@ public class ChatActivity extends GCMActivity {
         {
             lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
             lm.removeUpdates(this);
+
+            //This is where we let the UI know we are done
+            Log.d(Constants.LOG_TAG, "Changing the text in the dialog letting the user know we've found a location");
+            Log.d(Constants.LOG_TAG, "Longitude: " + location.getLongitude());
+            Log.d(Constants.LOG_TAG, "Longitude: " + location.getLatitude());
+
+            if(location != null) {
+                TextView locationStatus = (TextView) mloginDialog.getDialog().findViewById(R.id.loginStatusMessage);
+                locationStatus.setText(getString(R.string.location_found));
+                mLocation = location;
+            }
         }
 
         @Override
@@ -218,38 +312,54 @@ public class ChatActivity extends GCMActivity {
         public void onStatusChanged(String provider, int status, Bundle extras) {}
     }
 
-    private class SendPosition extends AsyncTask<Location, Void, Integer> {
+    private class SendPosition extends AsyncTask<Void, Void, Void> {
 
         //TODO: Get the real url here
         private String URL_SET_POSITION = "http://some_url.com";
 
-        protected Integer doInBackground(Location... locations) {
+        protected Void doInBackground(Void... voids) {
             HttpClient httpclient = new DefaultHttpClient();
             HttpPost httppost = new HttpPost(URL_SET_POSITION);
             HttpResponse response;
             //Returns 1 if it works and 0 if not
-            Integer result = 0;
 
             try {
 
                 SharedPreferences settings = getSharedPreferences(Constants.PREF_TAG, 0);
                 List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>(2);
                 nameValuePairs.add(new BasicNameValuePair("gcmKey", settings.getString(Constants.PREF_REGID,"")));
-                nameValuePairs.add(new BasicNameValuePair("longitude", String.valueOf(locations[0].getLongitude())));
-                nameValuePairs.add(new BasicNameValuePair("latitude", String.valueOf(locations[0].getLatitude())));
+                nameValuePairs.add(new BasicNameValuePair("longitude", String.valueOf(mLocation.getLongitude())));
+                nameValuePairs.add(new BasicNameValuePair("latitude", String.valueOf(mLocation.getLatitude())));
                 nameValuePairs.add(new BasicNameValuePair("username", settings.getString(Constants.PREF_USERNAME,"")));
                 httppost.setEntity(new UrlEncodedFormEntity(nameValuePairs));
 
                 response = httpclient.execute(httppost);
                 StatusLine statusLine = response.getStatusLine();
                 if(statusLine.getStatusCode() == HttpStatus.SC_OK){
-                    ByteArrayOutputStream out = new ByteArrayOutputStream();
-                    response.getEntity().writeTo(out);
-                    out.close();
-                    result = 1;
+                    JSONObject json = new JSONObject(EntityUtils.toString(response.getEntity()));
+                    String status = json.getString(Constants.WEBS_STATUS);
+                    JSONArray users = json.getJSONArray(Constants.WEBS_USERS);
+
+                    if(status.equals(Constants.WEBS_STATUS_OK)) {
+                        //TODO: Where should the users be saved?
+
+                        mloginDialog.getDialog().dismiss();
+                    }
+                    else if(status.equals(Constants.WEBS_STATUS_NOK)) {
+                        //TODO: Let the user know something broke
+                        TextView locationStatus = (TextView) mloginDialog.getDialog().findViewById(R.id.loginStatusMessage);
+                        locationStatus.setText(getString(R.string.login_failed));
+                    } else if(status.equals(Constants.WEBS_STATUS_USER_TAKEN)) {
+                        //TODO: Let the user know the username is taken
+                        TextView locationStatus = (TextView) mloginDialog.getDialog().findViewById(R.id.loginStatusMessage);
+                        locationStatus.setText(getString(R.string.username_taken));
+                    }
+
                     //Maybe we should output some error here in case it doesn't work. Either an error from the server if that's where it breaks or generate our own error if we can't reach the server
                 } else{
                     //Somehing broke
+                    TextView locationStatus = (TextView) mloginDialog.getDialog().findViewById(R.id.loginStatusMessage);
+                    locationStatus.setText(getString(R.string.login_failed));
                     response.getEntity().getContent().close();
                     throw new IOException(statusLine.getReasonPhrase());
                 }
@@ -257,11 +367,13 @@ public class ChatActivity extends GCMActivity {
                 //TODO Handle problems..
             } catch (IOException e) {
                 //TODO Handle problems..
+            } catch (JSONException e) {
+                //TODO Handle problems...
             }
-            return result;
+            return null;
         }
 
-        protected void onPostExecute(Integer result) {
+        protected void onPostExecute() {
             //We should probably do something here. Maybe we lock the UI for the user until atleast a first position is set. Then we unlock it here
         }
     }
