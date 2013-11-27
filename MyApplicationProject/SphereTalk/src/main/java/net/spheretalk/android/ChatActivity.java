@@ -266,7 +266,7 @@ public class ChatActivity extends GCMActivity {
                 SharedPreferences settings = getSharedPreferences(Constants.PREF_TAG, 0);
                 SharedPreferences.Editor editor = settings.edit();
                 editor.putString(Constants.PREF_USERNAME, username);
-
+                editor.commit();
                 new SendPosition().execute();
             }
         }
@@ -360,6 +360,11 @@ public class ChatActivity extends GCMActivity {
                 nameValuePairs.add(new BasicNameValuePair("longitude", String.valueOf(mLocation.getLongitude())));
                 nameValuePairs.add(new BasicNameValuePair("latitude", String.valueOf(mLocation.getLatitude())));
                 nameValuePairs.add(new BasicNameValuePair("username", settings.getString(Constants.PREF_USERNAME,"")));
+                Log.d(Constants.LOG_TAG, "Sending login to server:");
+                Log.d(Constants.LOG_TAG, "gcmKey:" + settings.getString(Constants.PREF_REGID,""));
+                Log.d(Constants.LOG_TAG, "longitude:" + String.valueOf(mLocation.getLongitude()));
+                Log.d(Constants.LOG_TAG, "latitude:" + String.valueOf(mLocation.getLatitude()));
+                Log.d(Constants.LOG_TAG, "username:" + settings.getString(Constants.PREF_USERNAME,""));
                 httppost.setEntity(new UrlEncodedFormEntity(nameValuePairs));
 
                 response = httpclient.execute(httppost);
@@ -377,24 +382,12 @@ public class ChatActivity extends GCMActivity {
                             JSONObject user = users.getJSONObject(i);
                             mUsers.add(user.getString(Constants.WEBS_USERNAME));
                         }
-
-                        mloginDialog.getDialog().dismiss();
+                        Log.d(Constants.LOG_TAG, "Nr of users: " + mUsers.size());
                     }
-                    else if(status.equals(Constants.WEBS_STATUS_NOK)) {
-                        //TODO: Let the user know something broke
-                        TextView locationStatus = (TextView) mloginDialog.getDialog().findViewById(R.id.loginStatusMessage);
-                        locationStatus.setText(getString(R.string.login_failed));
-                    } else if(status.equals(Constants.WEBS_STATUS_USER_TAKEN)) {
-                        //TODO: Let the user know the username is taken
-                        TextView locationStatus = (TextView) mloginDialog.getDialog().findViewById(R.id.loginStatusMessage);
-                        locationStatus.setText(getString(R.string.username_taken));
-                    }
+                    return status;
 
                     //Maybe we should output some error here in case it doesn't work. Either an error from the server if that's where it breaks or generate our own error if we can't reach the server
                 } else{
-                    //Somehing broke
-                    TextView locationStatus = (TextView) mloginDialog.getDialog().findViewById(R.id.loginStatusMessage);
-                    locationStatus.setText(getString(R.string.login_failed));
                     response.getEntity().getContent().close();
                     throw new IOException(statusLine.getReasonPhrase());
                 }
@@ -409,7 +402,23 @@ public class ChatActivity extends GCMActivity {
         }
 
         protected void onPostExecute(String status) {
-            //We should probably do something here. Maybe we lock the UI for the user until atleast a first position is set. Then we unlock it here
+            Log.d(Constants.LOG_TAG, "Login results: " + status);
+            if(status.equals(Constants.WEBS_STATUS_OK)) {
+                mloginDialog.getDialog().dismiss();
+            }
+            else if(status.equals(Constants.WEBS_STATUS_NOK)) {
+                //TODO: Let the user know something broke
+                TextView locationStatus = (TextView) mloginDialog.getDialog().findViewById(R.id.loginStatusMessage);
+                locationStatus.setText(getString(R.string.login_failed));
+            } else if(status.equals(Constants.WEBS_STATUS_USER_TAKEN)) {
+                //TODO: Let the user know the username is taken
+                TextView locationStatus = (TextView) mloginDialog.getDialog().findViewById(R.id.loginStatusMessage);
+                locationStatus.setText(getString(R.string.username_taken));
+            } else if(status == null) {
+                //Somehing broke
+                TextView locationStatus = (TextView) mloginDialog.getDialog().findViewById(R.id.loginStatusMessage);
+                locationStatus.setText(getString(R.string.login_failed));
+            }
         }
     }
 
