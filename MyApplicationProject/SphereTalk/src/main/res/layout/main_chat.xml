@@ -1,4 +1,4 @@
-<LinearLayout
+<RelativeLayout
     android:id="@+id/chat_view"
     android:layout_height="fill_parent"
     android:layout_width="fill_parent"
@@ -7,6 +7,13 @@
     <ListView
         android:id="@+id/chat_list"
         android:layout_width="fill_parent"
-        android:layout_height="fill_parent"/>
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_above="@+id/chat_input"/>
+    <EditText
+        android:id="@+id/chat_input"
+        android:layout_width="fill_parent"
+        android:layout_height="50dp"
+        android:layout_alignParentBottom="true"/>
 
-</LinearLayout>
+</RelativeLayout>

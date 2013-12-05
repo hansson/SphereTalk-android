@@ -6,12 +6,10 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
-import android.os.SystemClock;
 import android.support.v4.app.NotificationCompat;
+import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
-
 import com.google.android.gms.gcm.GoogleCloudMessaging;
-
 import net.spheretalk.android.util.Constants;
 
 /**
@@ -29,6 +27,7 @@ public class GcmIntentService  extends IntentService {
 
     @Override
     protected void onHandleIntent(Intent intent) {
+        Log.d(Constants.LOG_TAG, "Got a GCM message");
         Bundle extras = intent.getExtras();
         GoogleCloudMessaging gcm = GoogleCloudMessaging.getInstance(this);
         // The getMessageType() intent parameter must be the intent you received
@@ -53,16 +52,22 @@ public class GcmIntentService  extends IntentService {
             } else if (GoogleCloudMessaging.
                     MESSAGE_TYPE_MESSAGE.equals(messageType)) {
                 // This loop represents the service doing some work.
-                for (int i=0; i<5; i++) {
-                    Log.i(Constants.LOG_TAG, "Working... " + (i + 1)
-                            + "/5 @ " + SystemClock.elapsedRealtime());
-                    try {
-                        Thread.sleep(5000);
-                    } catch (InterruptedException e) {
-                    }
-                }
-                Log.i(Constants.LOG_TAG, "Completed work @ " + SystemClock.elapsedRealtime());
+
+                Intent chatIntent = new Intent(ChatActivity.RECEIVE_MESSAGE);
+                chatIntent.putExtra("json", extras);
+                LocalBroadcastManager.getInstance(this).sendBroadcast(chatIntent);
+
+//                for (int i=0; i<5; i++) {
+//                    Log.i(Constants.LOG_TAG, "Working... " + (i + 1)
+//                            + "/5 @ " + SystemClock.elapsedRealtime());
+//                    try {
+//                        Thread.sleep(5000);
+//                    } catch (InterruptedException e) {
+//                    }
+//                }
+//                Log.i(Constants.LOG_TAG, "Completed work @ " + SystemClock.elapsedRealtime());
                 // Post notification of received message.
+                Log.d(Constants.LOG_TAG,  "I Got a message!: " + extras.toString());
                 sendNotification("Received: " + extras.toString());
                 Log.i(Constants.LOG_TAG, "Received: " + extras.toString());
             }

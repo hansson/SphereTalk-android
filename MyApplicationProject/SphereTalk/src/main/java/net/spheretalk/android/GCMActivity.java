@@ -34,10 +34,12 @@ public abstract class GCMActivity extends Activity {
         // Check device for Play Services APK. If check succeeds, proceed with
         //  GCM registration.
         if (checkPlayServices()) {
+            Log.i(Constants.LOG_TAG, "PlayServices Found.");
             gcm = GoogleCloudMessaging.getInstance(this);
             regid = getRegistrationId(context);
 
             if (regid.isEmpty()) {
+                Log.i(Constants.LOG_TAG, "No registration id found, fetching a new one");
                 new RegisterAsyncTask().execute();
             }
         } else {
@@ -144,6 +146,7 @@ public abstract class GCMActivity extends Activity {
                 // Require the user to click a button again, or perform
                 // exponential back-off.
             }
+            Log.i(Constants.LOG_TAG, msg);
             return msg;
         }
 

@@ -1,32 +1,22 @@
 package net.spheretalk.android;
 
-import android.app.AlertDialog;
-import android.app.Dialog;
-import android.app.DialogFragment;
-import android.app.Fragment;
-import android.app.FragmentManager;
-import android.content.Context;
-import android.content.SharedPreferences;
+import android.app.*;
+import android.content.*;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v13.app.FragmentPagerAdapter;
+import android.support.v4.content.LocalBroadcastManager;
 import android.support.v4.view.ViewPager;
 import android.util.Log;
-import android.view.LayoutInflater;
-import android.view.Menu;
-import android.view.MenuItem;
-import android.view.View;
-import android.view.ViewGroup;
+import android.view.*;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
-
 import net.spheretalk.android.util.Constants;
 import net.spheretalk.android.util.HiddenConstants;
-
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.NameValuePair;
@@ -42,7 +32,6 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -63,6 +52,10 @@ public class ChatActivity extends GCMActivity {
     DialogFragment mloginDialog;
     List<String> mUsers;
 
+    private EditText mInput_text;
+
+    public static final String RECEIVE_MESSAGE = "net.spheretalk.android.RECEIVE_MESSAGE";
+
     /**
      * The {@link ViewPager} that will host the section contents.
      */
@@ -73,6 +66,13 @@ public class ChatActivity extends GCMActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_chat);
 
+        LocalBroadcastManager bManager = LocalBroadcastManager.getInstance(this);
+        IntentFilter intentFilter = new IntentFilter();
+        intentFilter.addAction(RECEIVE_MESSAGE);
+        bManager.registerReceiver(bReceiver, intentFilter);
+
+        SharedPreferences settings = getSharedPreferences(Constants.PREF_TAG, 0);
+
         // Create the adapter that will return a fragment for each of the three
         // primary sections of the activity.
         mSectionsPagerAdapter = new SectionsPagerAdapter(getFragmentManager());
@@ -81,9 +81,21 @@ public class ChatActivity extends GCMActivity {
         mViewPager = (ViewPager) findViewById(R.id.pager);
         mViewPager.setAdapter(mSectionsPagerAdapter);
 
-        mloginDialog = new LoginDialogFragment();
-        mloginDialog.show(getFragmentManager(), "Login Dialog");
+        if(settings.getString(Constants.PREF_USERNAME,"").length() < 1) {
+            mloginDialog = new LoginDialogFragment();
+            mloginDialog.show(getFragmentManager(), "Login Dialog");
+        }
     }
+
+    private BroadcastReceiver bReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if(intent.getAction().equals(RECEIVE_MESSAGE)) {
+                String messageJson = intent.getStringExtra("json");
+                Log.d(Constants.LOG_TAG, "Got a broacast message");
+            }
+        }
+    };
 
 
     @Override
@@ -104,6 +116,10 @@ public class ChatActivity extends GCMActivity {
             return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    public void sendMessage(String target, String message) {
+        new SendMessage().execute(target, message);
     }
 
     /**
@@ -151,6 +167,8 @@ public class ChatActivity extends GCMActivity {
          */
         private static final String ARG_SECTION_NUMBER = "section_number";
 
+        private EditText inputText;
+
         /**
          * Returns a new instance of this fragment for the given section
          * number.
@@ -167,12 +185,26 @@ public class ChatActivity extends GCMActivity {
         public View onCreateView(LayoutInflater inflater, ViewGroup container,
                 Bundle saveInstanceState) {
             View rootView = inflater.inflate(R.layout.main_chat, container, false);
+            inputText = (EditText) rootView.findViewById(R.id.chat_input);
+
+            inputText.setOnKeyListener(new View.OnKeyListener() {
+            @Override
+            public boolean onKey(View v, int keyCode, KeyEvent event) {
+                if((event.getAction() == KeyEvent.ACTION_DOWN) &&
+                        (keyCode == KeyEvent.KEYCODE_ENTER)) {
+                    Log.d(Constants.LOG_TAG, "Enter pressed!");
+                    ((ChatActivity) getActivity()).sendMessage("", inputText.getText().toString());
+                    inputText.setText("");
+                }
+
+                return false;
+            }
+        });
             return rootView;
         }
+
+
     }
-
-
-
 
 //    /**
 //     * A placeholder fragment containing a simple view.
@@ -322,6 +354,7 @@ public class ChatActivity extends GCMActivity {
             Log.d(Constants.LOG_TAG, "Changing the text in the dialog letting the user know we've found a location");
             Log.d(Constants.LOG_TAG, "Longitude: " + location.getLongitude());
             Log.d(Constants.LOG_TAG, "Longitude: " + location.getLatitude());
+            Log.d(Constants.LOG_TAG, "Precision: " + location.getAccuracy());
 
             if(location != null) {
                 TextView locationStatus = (TextView) mloginDialog.getDialog().findViewById(R.id.loginStatusMessage);
@@ -357,14 +390,14 @@ public class ChatActivity extends GCMActivity {
                 SharedPreferences settings = getSharedPreferences(Constants.PREF_TAG, 0);
                 List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>(2);
                 nameValuePairs.add(new BasicNameValuePair("gcmKey", settings.getString(Constants.PREF_REGID,"")));
-                nameValuePairs.add(new BasicNameValuePair("longitude", String.valueOf(mLocation.getLongitude())));
-                nameValuePairs.add(new BasicNameValuePair("latitude", String.valueOf(mLocation.getLatitude())));
+                nameValuePairs.add(new BasicNameValuePair("lon", String.valueOf(mLocation.getLongitude())));
+                nameValuePairs.add(new BasicNameValuePair("lat", String.valueOf(mLocation.getLatitude())));
                 nameValuePairs.add(new BasicNameValuePair("username", settings.getString(Constants.PREF_USERNAME,"")));
                 Log.d(Constants.LOG_TAG, "Sending login to server:");
-                Log.d(Constants.LOG_TAG, "gcmKey:" + settings.getString(Constants.PREF_REGID,""));
-                Log.d(Constants.LOG_TAG, "longitude:" + String.valueOf(mLocation.getLongitude()));
-                Log.d(Constants.LOG_TAG, "latitude:" + String.valueOf(mLocation.getLatitude()));
-                Log.d(Constants.LOG_TAG, "username:" + settings.getString(Constants.PREF_USERNAME,""));
+                Log.d(Constants.LOG_TAG, "gcmKey: " + settings.getString(Constants.PREF_REGID,""));
+                Log.d(Constants.LOG_TAG, "longitude: " + String.valueOf(mLocation.getLongitude()));
+                Log.d(Constants.LOG_TAG, "latitude: " + String.valueOf(mLocation.getLatitude()));
+                Log.d(Constants.LOG_TAG, "username: " + settings.getString(Constants.PREF_USERNAME,""));
                 httppost.setEntity(new UrlEncodedFormEntity(nameValuePairs));
 
                 response = httpclient.execute(httppost);
@@ -373,6 +406,8 @@ public class ChatActivity extends GCMActivity {
                     JSONObject json = new JSONObject(EntityUtils.toString(response.getEntity()));
                     String status = json.getString(Constants.WEBS_STATUS);
                     JSONArray users = json.getJSONArray(Constants.WEBS_USERS);
+
+                    Log.d(Constants.LOG_TAG, "Send position status: " + status);
 
                     if(status.equals(Constants.WEBS_STATUS_OK)) {
                         //TODO: Where should the users be saved? Stored in an arraylist for now
@@ -427,12 +462,11 @@ public class ChatActivity extends GCMActivity {
      *
      */
 
-    private class SendMessage extends AsyncTask<String, Void, Integer> {
+    private class SendMessage extends AsyncTask<String, Void, Void> {
 
-        //TODO: Get the real url here
         private String URL_SET_POSITION = HiddenConstants.URL + HiddenConstants.MESSAGE_PATH;
 
-        protected Integer doInBackground(String... strings) {
+        protected Void doInBackground(String... strings) {
             HttpClient httpclient = new DefaultHttpClient();
             HttpPost httppost = new HttpPost(URL_SET_POSITION);
             HttpResponse response;
@@ -447,13 +481,22 @@ public class ChatActivity extends GCMActivity {
                 nameValuePairs.add(new BasicNameValuePair("message", strings[1]));
                 httppost.setEntity(new UrlEncodedFormEntity(nameValuePairs));
 
+                Log.d(Constants.LOG_TAG, "Sending message to server");
+                Log.d(Constants.LOG_TAG, "gcmKey: " + settings.getString(Constants.PREF_REGID,""));
+                Log.d(Constants.LOG_TAG, "recipient: " + String.valueOf(strings[0]));
+                Log.d(Constants.LOG_TAG, "message: " + String.valueOf(strings[1]).replaceAll("(\\r|\\n)", ""));
+
+
                 response = httpclient.execute(httppost);
                 StatusLine statusLine = response.getStatusLine();
+                Log.d(Constants.LOG_TAG, "Send message http status: " + statusLine.getStatusCode());
                 if(statusLine.getStatusCode() == HttpStatus.SC_OK){
-                    ByteArrayOutputStream out = new ByteArrayOutputStream();
-                    response.getEntity().writeTo(out);
-                    out.close();
-                    result = 1;
+
+                    JSONObject json = new JSONObject(EntityUtils.toString(response.getEntity()));
+                    String status = json.getString(Constants.WEBS_STATUS);
+
+                    Log.d(Constants.LOG_TAG, "Send message status: " + status);
+
                     //Maybe we should output some error here in case it doesn't work. Either an error from the server if that's where it breaks or generate our own error if we can't reach the server
                 } else{
                     //Somehing broke
@@ -461,14 +504,16 @@ public class ChatActivity extends GCMActivity {
                     throw new IOException(statusLine.getReasonPhrase());
                 }
             } catch (ClientProtocolException e) {
-                //TODO Handle problems..
+                Log.e(Constants.LOG_TAG, e.getMessage());
             } catch (IOException e) {
-                //TODO Handle problems..
+                Log.e(Constants.LOG_TAG, e.getMessage());
+            } catch (JSONException e) {
+                Log.e(Constants.LOG_TAG, e.getMessage());
             }
-            return result;
+            return null;
         }
 
-        protected void onPostExecute(Integer result) {
+        protected void onPostExecute() {
             //We should probably do something here. Maybe we lock the UI for the user until atleast a first position is set. Then we unlock it here
         }
     }
